@@ -26,20 +26,15 @@ which python   # e.g. /home/you/Documents/DEV/md2docx/.venv/bin/python
 
 ### Step 2 — Claude Code
 
-Add to `~/.claude/settings.json` (create the file if it doesn't exist):
+Run this one command (replace the path with wherever you cloned the repo):
 
-```json
-{
-  "mcpServers": {
-    "md2docx": {
-      "command": "/home/you/Documents/DEV/md2docx/.venv/bin/python",
-      "args": ["/home/you/Documents/DEV/md2docx/server.py"]
-    }
-  }
-}
+```bash
+claude mcp add --scope user md2docx \
+  /path/to/md2docx/.venv/bin/python \
+  /path/to/md2docx/server.py
 ```
 
-Replace `/home/you/Documents/DEV/md2docx` with your actual path. Then restart Claude Code. Verify with `/mcp` — you should see **md2docx** listed.
+Then restart Claude Code. Verify with `/mcp` — you should see **md2docx** listed.
 
 ---
 
@@ -103,9 +98,7 @@ optional arguments:
 | File | Description |
 |------|-------------|
 | `style_default.json` | Neutral Calibri — clean, professional, no cover page |
-| `style_minipass.json` | Minipass branding — coloured headings, cover page, confidentiality footer |
-
-Copy either file and edit to create your own style. All colours are `"#RRGGBB"` hex strings.
+Copy `style_default.json`, rename it, and edit to create your own style. All colours are `"#RRGGBB"` hex strings.
 
 ### Style Guide Reference
 
