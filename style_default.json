@@ -1,0 +1,43 @@
+{
+  "_comment": "md2docx default style guide — neutral Calibri, no cover page.",
+
+  "document": {
+    "page_size": "letter",
+    "line_spacing": 1.15,
+    "margins": {
+      "top_cm": 2.5, "bottom_cm": 2.5,
+      "left_cm": 2.5, "right_cm": 2.5
+    }
+  },
+
+  "fonts": {
+    "body":        "Calibri",
+    "h1_override": "",
+    "cover_title": "Calibri",
+    "footer":      "Calibri"
+  },
+
+  "headings": {
+    "h1": { "size": 16, "color": "#000000", "bold": true,  "italic": false },
+    "h2": { "size": 14, "color": "#1F3864", "bold": true,  "italic": false },
+    "h3": { "size": 12, "color": "#1F3864", "bold": false, "italic": true  },
+    "h4": { "size": 11, "color": "#404040", "bold": false, "italic": true  }
+  },
+
+  "body":        { "size": 11, "color": "#212121" },
+  "blockquote":  { "size": 11, "color": "#555555", "border_color": "#AAAAAA" },
+  "code_inline": { "size": 10, "color": "#333333" },
+  "code_block":  { "size": 10, "color": "#333333" },
+
+  "table": {
+    "header_bg":   "#333333",
+    "header_text": "#FFFFFF",
+    "body_text":   "#212121",
+    "header_size": 10,
+    "body_size":   10
+  },
+
+  "cover": { "enabled": false },
+
+  "footer": { "label": "", "size": 9, "color": "#1A1A1A" }
+}
