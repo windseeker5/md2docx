@@ -30,11 +30,13 @@
   "code_block":  { "size": 10, "color": "#555555" },
 
   "table": {
-    "header_bg":   "#2E3192",
-    "header_text": "#FFFFFF",
-    "body_text":   "#434343",
-    "header_size": 10,
-    "body_size":   10
+    "header_bg":    "#2E3192",
+    "header_text":  "#FFFFFF",
+    "body_text":    "#434343",
+    "header_size":  10,
+    "body_size":    10,
+    "border_color": "#2E3192",
+    "border_size":  1
   },
 
   "cover": {

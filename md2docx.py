@@ -62,11 +62,13 @@ FOOTER_SIZE      = 9
 FOOTER_COLOR     = (0x1A, 0x1A, 0x1A)
 FONT_NAME_FOOTER = 'Calibri'
 
-TABLE_HEADER_BG   = '333333'
-TABLE_HEADER_TEXT = (0xFF, 0xFF, 0xFF)
-TABLE_HEADER_SIZE = 10
-TABLE_BODY_TEXT   = (0x21, 0x21, 0x21)
-TABLE_BODY_SIZE   = 10
+TABLE_HEADER_BG     = '333333'
+TABLE_HEADER_TEXT   = (0xFF, 0xFF, 0xFF)
+TABLE_HEADER_SIZE   = 10
+TABLE_BODY_TEXT     = (0x21, 0x21, 0x21)
+TABLE_BODY_SIZE     = 10
+TABLE_BORDER_COLOR  = 'CCCCCC'
+TABLE_BORDER_SIZE   = 1
 
 DOC_LINE_SPACING = 1.15
 DOC_MARGINS      = {'top': 2.5, 'bottom': 2.5, 'left': 2.5, 'right': 2.5}
@@ -93,6 +95,7 @@ def build_style_constants(cfg: dict):
            QUOTE_BORDER_SPACE, QUOTE_SPACE_BEFORE, QUOTE_SPACE_AFTER
     global TABLE_HEADER_BG, TABLE_HEADER_TEXT, TABLE_HEADER_SIZE
     global TABLE_BODY_TEXT, TABLE_BODY_SIZE
+    global TABLE_BORDER_COLOR, TABLE_BORDER_SIZE
     global DOC_LINE_SPACING, DOC_MARGINS
     global COVER_ENABLED, COVER_BG_COLOR, COVER_LOGO_PATH, COVER_LOGO_WIDTH, \
            COVER_TITLE, COVER_TITLE_SIZE, COVER_TITLE_COLOR, COVER_TOP_SPACER, COVER_FONT
@@ -151,11 +154,13 @@ def build_style_constants(cfg: dict):
     }
 
     tbl = cfg.get('table', {})
-    TABLE_HEADER_BG   = tbl.get('header_bg',   '#333333').lstrip('#')
-    TABLE_HEADER_TEXT = hex_to_rgb(tbl.get('header_text', '#FFFFFF'))
-    TABLE_HEADER_SIZE = tbl.get('header_size', 10)
-    TABLE_BODY_TEXT   = hex_to_rgb(tbl.get('body_text',   '#212121'))
-    TABLE_BODY_SIZE   = tbl.get('body_size',   10)
+    TABLE_HEADER_BG    = tbl.get('header_bg',    '#333333').lstrip('#')
+    TABLE_HEADER_TEXT  = hex_to_rgb(tbl.get('header_text', '#FFFFFF'))
+    TABLE_HEADER_SIZE  = tbl.get('header_size', 10)
+    TABLE_BODY_TEXT    = hex_to_rgb(tbl.get('body_text',   '#212121'))
+    TABLE_BODY_SIZE    = tbl.get('body_size',   10)
+    TABLE_BORDER_COLOR = tbl.get('border_color', '#CCCCCC').lstrip('#')
+    TABLE_BORDER_SIZE  = float(tbl.get('border_size', 1))
 
     doc_cfg = cfg.get('document', {})
     DOC_LINE_SPACING = doc_cfg.get('line_spacing', 1.15)
@@ -205,6 +210,25 @@ def _set_cell_bg(cell, hex_color):
     shd.set(qn('w:color'), 'auto')
     shd.set(qn('w:fill'),  hex_color)
     tcPr.append(shd)
+
+
+def _set_table_borders(tbl, color_hex, size_pt):
+    """Apply uniform borders to all sides of a table (color + thickness)."""
+    sz_val = str(max(1, int(round(size_pt * 8))))  # pts → eighth-points
+    color  = color_hex.lstrip('#').upper()
+    tblPr = tbl._tbl.find(qn('w:tblPr'))
+    if tblPr is None:
+        tblPr = OxmlElement('w:tblPr')
+        tbl._tbl.insert(0, tblPr)
+    tblBdr = OxmlElement('w:tblBorders')
+    for side in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+        edge = OxmlElement(f'w:{side}')
+        edge.set(qn('w:val'),   'single')
+        edge.set(qn('w:sz'),    sz_val)
+        edge.set(qn('w:space'), '0')
+        edge.set(qn('w:color'), color)
+        tblBdr.append(edge)
+    tblPr.append(tblBdr)
 
 
 def _add_para_border(para, side, color_hex, sz=6, space=4):
@@ -471,6 +495,7 @@ def render_table(doc, token):
 
     tbl = doc.add_table(rows=len(all_rows), cols=num_cols)
     tbl.style = 'Table Grid'
+    _set_table_borders(tbl, TABLE_BORDER_COLOR, TABLE_BORDER_SIZE)
 
     for r_idx, row_cells in enumerate(all_rows):
         is_header = r_idx < len(head_rows)
