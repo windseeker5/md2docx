@@ -56,8 +56,6 @@ def convert_markdown_to_docx(
         converter.render_cover_page(doc)
     for token in tokens:
         converter.render_block(doc, token)
-    if converter.FOOTER_LABEL:
-        converter.setup_footer(doc)
 
     doc.save(str(out))
     return f"Saved → {out}"

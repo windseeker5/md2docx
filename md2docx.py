@@ -55,6 +55,7 @@ COVER_TITLE       = ''
 COVER_TITLE_SIZE  = 48
 COVER_TITLE_COLOR = (0x1A, 0x1A, 0x1A)
 COVER_TOP_SPACER  = 72
+COVER_FONT        = 'Calibri'
 
 FOOTER_LABEL     = ''
 FOOTER_SIZE      = 9
@@ -94,7 +95,7 @@ def build_style_constants(cfg: dict):
     global TABLE_BODY_TEXT, TABLE_BODY_SIZE
     global DOC_LINE_SPACING, DOC_MARGINS
     global COVER_ENABLED, COVER_BG_COLOR, COVER_LOGO_PATH, COVER_LOGO_WIDTH, \
-           COVER_TITLE, COVER_TITLE_SIZE, COVER_TITLE_COLOR, COVER_TOP_SPACER
+           COVER_TITLE, COVER_TITLE_SIZE, COVER_TITLE_COLOR, COVER_TOP_SPACER, COVER_FONT
     global FOOTER_LABEL, FOOTER_SIZE, FOOTER_COLOR, FONT_NAME_FOOTER
 
     FONT_NAME       = cfg['fonts']['body']
@@ -175,6 +176,7 @@ def build_style_constants(cfg: dict):
     COVER_TITLE_SIZE  = int(cov.get('title_size', 48))
     COVER_TITLE_COLOR = hex_to_rgb(cov.get('title_color', '#1A1A1A'))
     COVER_TOP_SPACER  = int(cov.get('top_spacer_pt', 72))
+    COVER_FONT        = cfg['fonts'].get('cover_title', FONT_NAME)
 
     ftr = cfg.get('footer', {})
     FOOTER_LABEL     = ftr.get('label', '')
@@ -590,73 +592,156 @@ def setup_document():
     normal_style.paragraph_format.line_spacing_rule = WD_LINE_SPACING.MULTIPLE
     normal_style.paragraph_format.line_spacing      = DOC_LINE_SPACING
 
+    # "Different first page" — suppresses footer on cover page
+    if COVER_ENABLED:
+        sectPr    = sec._sectPr
+        titlePg   = OxmlElement('w:titlePg')
+        sectPr.append(titlePg)
+        # Page counter starts at 0 so cover = 0 (hidden) and first content page = 1
+        pgNumType = OxmlElement('w:pgNumType')
+        pgNumType.set(qn('w:start'), '0')
+        sectPr.append(pgNumType)
+
+    if FOOTER_LABEL:
+        _add_page_numbers(sec)
+
     return doc
 
 
 # ── cover page & footer ───────────────────────────────────────────────────────
 
+def _add_cover_background(doc, para):
+    """Insert a full-page solid-color rectangle anchored behind the cover text."""
+    sec = doc.sections[0]
+    cx  = int(sec.page_width)  if sec.page_width  else 7560000
+    cy  = int(sec.page_height) if sec.page_height else 10692000
+    xml = (
+        f'<w:r'
+        f' xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+        f' xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"'
+        f' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+        f' xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">'
+        f'<w:drawing>'
+        f'<wp:anchor distT="0" distB="0" distL="0" distR="0"'
+        f' simplePos="0" relativeHeight="1" behindDoc="1"'
+        f' locked="1" layoutInCell="1" allowOverlap="0">'
+        f'<wp:simplePos x="0" y="0"/>'
+        f'<wp:positionH relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionH>'
+        f'<wp:positionV relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionV>'
+        f'<wp:extent cx="{cx}" cy="{cy}"/>'
+        f'<wp:effectExtent l="0" t="0" r="0" b="0"/>'
+        f'<wp:wrapNone/>'
+        f'<wp:docPr id="1001" name="CoverBg"/>'
+        f'<wp:cNvGraphicFramePr/>'
+        f'<a:graphic>'
+        f'<a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">'
+        f'<wps:wsp>'
+        f'<wps:cNvSpPr><a:spLocks noChangeArrowheads="1"/></wps:cNvSpPr>'
+        f'<wps:spPr>'
+        f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
+        f'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
+        f'<a:solidFill><a:srgbClr val="{COVER_BG_COLOR}"/></a:solidFill>'
+        f'<a:ln><a:noFill/></a:ln>'
+        f'</wps:spPr>'
+        f'<wps:bodyPr/>'
+        f'</wps:wsp>'
+        f'</a:graphicData>'
+        f'</a:graphic>'
+        f'</wp:anchor>'
+        f'</w:drawing>'
+        f'</w:r>'
+    )
+    para._p.append(etree.fromstring(xml))
+
+
+def _add_page_numbers(section):
+    """Footer: left label + right PAGE field, no borders."""
+    footer = section.footer
+    ftr    = footer._element
+    for child in list(ftr):
+        ftr.remove(child)
+
+    sz_hhp           = FOOTER_SIZE * 2
+    footer_color_hex = '%02X%02X%02X' % FOOTER_COLOR
+    rpr = (
+        '<w:rPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        f'<w:rFonts w:ascii="{FONT_NAME_FOOTER}" w:hAnsi="{FONT_NAME_FOOTER}"/>'
+        f'<w:sz w:val="{sz_hhp}"/>'
+        f'<w:color w:val="{footer_color_hex}"/>'
+        '</w:rPr>'
+    )
+    xml = (
+        '<w:tbl xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        '<w:tblPr>'
+        '<w:tblW w:w="5000" w:type="pct"/>'
+        '<w:tblBorders>'
+        '<w:top    w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        '<w:left   w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        '<w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        '<w:right  w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        '<w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        '<w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        '</w:tblBorders>'
+        '</w:tblPr>'
+        '<w:tr>'
+        '<w:tc>'
+        '<w:tcPr><w:tcW w:w="4250" w:type="pct"/></w:tcPr>'
+        '<w:p><w:pPr><w:jc w:val="left"/></w:pPr>'
+        f'<w:r>{rpr}<w:t xml:space="preserve">{FOOTER_LABEL}</w:t></w:r>'
+        '</w:p></w:tc>'
+        '<w:tc>'
+        '<w:tcPr><w:tcW w:w="750" w:type="pct"/></w:tcPr>'
+        '<w:p><w:pPr><w:jc w:val="right"/></w:pPr>'
+        f'<w:r>{rpr}<w:fldChar w:fldCharType="begin"/></w:r>'
+        f'<w:r>{rpr}<w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>'
+        f'<w:r>{rpr}<w:fldChar w:fldCharType="end"/></w:r>'
+        '</w:p></w:tc>'
+        '</w:tr>'
+        '</w:tbl>'
+        '<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>'
+    )
+    for elem in etree.fromstring(f'<root>{xml}</root>'):
+        ftr.append(elem)
+
+
 def render_cover_page(doc):
-    """Insert a cover page as section 0; content follows in section 1."""
-    def _cp(space_before=0, space_after=0, align=None):
-        p = doc.add_paragraph()
-        p.paragraph_format.space_before = Pt(space_before)
-        p.paragraph_format.space_after  = Pt(space_after)
-        p.paragraph_format.left_indent  = Pt(0)
-        p.paragraph_format.right_indent = Pt(0)
-        if align:
-            p.alignment = align
-        if COVER_BG_COLOR:
-            _set_para_shading(p, COVER_BG_COLOR)
-        return p
+    """Insert a styled cover page (full-bg rect + logo + title) before main content."""
+    # Top spacer — background rectangle is anchored inside this paragraph
+    sp = doc.add_paragraph()
+    sp.paragraph_format.space_before = Pt(COVER_TOP_SPACER)
+    sp.paragraph_format.space_after  = Pt(0)
+    if COVER_BG_COLOR:
+        _add_cover_background(doc, sp)
 
-    # Top spacer — pushes logo+title down the page
-    _cp(space_before=0, space_after=COVER_TOP_SPACER)
-
-    # Logo
+    # Logo — centered
+    logo_para = doc.add_paragraph()
+    logo_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    logo_para.paragraph_format.space_before = Pt(0)
+    logo_para.paragraph_format.space_after  = Pt(48)
     if COVER_LOGO_PATH and Path(COVER_LOGO_PATH).exists():
-        p = _cp(space_before=0, space_after=12, align=WD_ALIGN_PARAGRAPH.CENTER)
         try:
-            p.add_run().add_picture(COVER_LOGO_PATH, width=Cm(COVER_LOGO_WIDTH))
+            logo_para.add_run().add_picture(COVER_LOGO_PATH, width=Cm(COVER_LOGO_WIDTH))
         except Exception:
             pass
 
     # Title
     if COVER_TITLE:
-        p = _cp(space_before=24, space_after=0, align=WD_ALIGN_PARAGRAPH.CENTER)
-        run = p.add_run(COVER_TITLE)
-        run.font.name      = FONT_NAME_SERIF
+        title = doc.add_paragraph()
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        title.paragraph_format.space_before = Pt(0)
+        title.paragraph_format.space_after  = Pt(0)
+        run = title.add_run(COVER_TITLE)
+        run.font.name      = COVER_FONT
         run.font.size      = Pt(COVER_TITLE_SIZE)
-        run.font.color.rgb = RGBColor(*COVER_TITLE_COLOR)
         run.font.bold      = True
+        run.font.color.rgb = RGBColor(*COVER_TITLE_COLOR)
 
-    # Bottom filler — keeps bg color across the lower half of the page
-    p_fill = _cp(space_before=0, space_after=0)
-    p_fill.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
-    p_fill.paragraph_format.line_spacing      = Pt(500)
-
-    # Section break: content starts on a new page (section 1)
-    doc.add_section(WD_SECTION.NEW_PAGE)
-
-    # Tighten cover section margins so paragraph shading reaches the page edges
-    cov_sec               = doc.sections[0]
-    cov_sec.top_margin    = Cm(0.3)
-    cov_sec.bottom_margin = Cm(0.3)
-    cov_sec.left_margin   = Cm(0.3)
-    cov_sec.right_margin  = Cm(0.3)
-
-
-def setup_footer(doc):
-    """Add a centred label footer to the content section (all pages after cover)."""
-    section = doc.sections[-1]
-    footer  = section.footer
-    footer.is_linked_to_previous = False
-
-    para = footer.paragraphs[0]
-    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = para.add_run(FOOTER_LABEL)
-    run.font.name      = FONT_NAME_FOOTER
-    run.font.size      = Pt(FOOTER_SIZE)
-    run.font.color.rgb = RGBColor(*FOOTER_COLOR)
+    # Page break — content starts on next page (same section, titlePg suppresses footer here)
+    brk = doc.add_paragraph()
+    run = brk.add_run()
+    br  = OxmlElement('w:br')
+    br.set(qn('w:type'), 'page')
+    run._r.append(br)
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
@@ -679,8 +764,6 @@ def main():
         render_cover_page(doc)
     for token in tokens:
         render_block(doc, token)
-    if FOOTER_LABEL:
-        setup_footer(doc)
     doc.save(args.output)
     print(f'✓  Saved → {args.output}')
 
