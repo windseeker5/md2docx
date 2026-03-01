@@ -15,6 +15,8 @@ from pathlib import Path
 # Ensure md2docx.py is importable regardless of working directory
 sys.path.insert(0, str(Path(__file__).parent))
 
+import importlib
+
 import mistune
 from mcp.server.fastmcp import FastMCP
 import md2docx as converter
@@ -40,6 +42,8 @@ def convert_markdown_to_docx(
     Returns:
         Confirmation message with the saved file path.
     """
+    importlib.reload(converter)
+
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
 

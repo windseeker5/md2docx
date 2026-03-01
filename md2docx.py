@@ -40,6 +40,11 @@ CODE_INLINE = {'size': 10, 'color': (0x33, 0x33, 0x33), 'bold': False, 'italic':
 CODE_BLOCK  = {'size': 10, 'color': (0x33, 0x33, 0x33)}
 
 QUOTE_BORDER_COLOR = 'AAAAAA'
+QUOTE_BG_COLOR     = ''
+QUOTE_BORDER_WIDTH = 12
+QUOTE_BORDER_SPACE = 4   # pt — gap from accent bar to text (inside fill)
+QUOTE_SPACE_BEFORE = 3   # pt — outside the block, above
+QUOTE_SPACE_AFTER  = 3   # pt — outside the block, below
 
 TABLE_HEADER_BG   = '333333'
 TABLE_HEADER_TEXT = (0xFF, 0xFF, 0xFF)
@@ -68,7 +73,8 @@ def hex_to_rgb(h: str) -> tuple:
 def build_style_constants(cfg: dict):
     """Populate module-level style constants from a loaded JSON style dict."""
     global FONT_NAME, FONT_NAME_SERIF, HEADING_STYLES, NORMAL, QUOTE, CODE_INLINE, CODE_BLOCK
-    global QUOTE_BORDER_COLOR
+    global QUOTE_BORDER_COLOR, QUOTE_BG_COLOR, QUOTE_BORDER_WIDTH, \
+           QUOTE_BORDER_SPACE, QUOTE_SPACE_BEFORE, QUOTE_SPACE_AFTER
     global TABLE_HEADER_BG, TABLE_HEADER_TEXT, TABLE_HEADER_SIZE
     global TABLE_BODY_TEXT, TABLE_BODY_SIZE
     global DOC_LINE_SPACING, DOC_MARGINS
@@ -102,9 +108,14 @@ def build_style_constants(cfg: dict):
         'size':   bq.get('size', 11),
         'color':  hex_to_rgb(bq.get('color', '#555555')),
         'bold':   False,
-        'italic': True,
+        'italic': bq.get('italic', True),
     }
     QUOTE_BORDER_COLOR = bq.get('border_color', '#AAAAAA').lstrip('#')
+    QUOTE_BG_COLOR     = bq.get('bg_color', '').lstrip('#')
+    QUOTE_BORDER_WIDTH = int(bq.get('border_width', 12))
+    QUOTE_BORDER_SPACE = int(bq.get('border_space', 4))
+    QUOTE_SPACE_BEFORE = int(bq.get('space_before', 3))
+    QUOTE_SPACE_AFTER  = int(bq.get('space_after',  3))
 
     ci = cfg.get('code_inline', {})
     CODE_INLINE = {
@@ -160,17 +171,27 @@ def _set_cell_bg(cell, hex_color):
     tcPr.append(shd)
 
 
-def _add_para_border(para, side, color_hex, sz=6):
+def _add_para_border(para, side, color_hex, sz=6, space=4):
     """Add a single-line border on one side of a paragraph."""
     pPr  = para._p.get_or_add_pPr()
     pBdr = OxmlElement('w:pBdr')
     edge = OxmlElement(f'w:{side}')
     edge.set(qn('w:val'),   'single')
     edge.set(qn('w:sz'),    str(sz))
-    edge.set(qn('w:space'), '4')
+    edge.set(qn('w:space'), str(space))
     edge.set(qn('w:color'), color_hex)
     pBdr.append(edge)
     pPr.append(pBdr)
+
+
+def _set_para_shading(para, fill_hex: str):
+    """Set paragraph background fill color (OOXML w:shd)."""
+    pPr = para._p.get_or_add_pPr()
+    shd = OxmlElement('w:shd')
+    shd.set(qn('w:val'),   'clear')
+    shd.set(qn('w:color'), 'auto')
+    shd.set(qn('w:fill'),  fill_hex.upper())
+    pPr.append(shd)
 
 
 def _add_linebreak(para):
@@ -182,7 +203,7 @@ def _add_linebreak(para):
 
 # ── inline renderer ──────────────────────────────────────────────────────────
 
-def render_inline(para, children, style, bold=False, italic=False):
+def render_inline(para, children, style, bold=False, italic=False, force_no_italic=False):
     """Recursively walk mistune inline AST nodes and add formatted runs."""
     for token in (children or []):
         t = token.get('type', '')
@@ -206,16 +227,19 @@ def render_inline(para, children, style, bold=False, italic=False):
 
         elif t == 'strong':
             render_inline(para, token.get('children', []), style,
-                          bold=True, italic=italic)
+                          bold=True, italic=italic,
+                          force_no_italic=force_no_italic)
 
         elif t == 'emphasis':
             render_inline(para, token.get('children', []), style,
-                          bold=bold, italic=True)
+                          bold=bold, italic=(False if force_no_italic else True),
+                          force_no_italic=force_no_italic)
 
         elif t == 'link':
             # Render link text (no click-through needed)
             render_inline(para, token.get('children', []), style,
-                          bold=bold, italic=italic)
+                          bold=bold, italic=italic,
+                          force_no_italic=force_no_italic)
 
         elif t == 'image':
             # Skip image references silently
@@ -250,7 +274,8 @@ def render_inline(para, children, style, bold=False, italic=False):
                            italic=(style['italic'] or italic))
             elif token.get('children'):
                 render_inline(para, token['children'], style,
-                              bold=bold, italic=italic)
+                              bold=bold, italic=italic,
+                              force_no_italic=force_no_italic)
 
 
 # ── block renderers ──────────────────────────────────────────────────────────
@@ -300,11 +325,15 @@ def render_blockquote(doc, children):
         if ct in ('paragraph', 'block_text'):
             para = doc.add_paragraph()
             para.paragraph_format.left_indent  = Inches(0.35)
-            para.paragraph_format.right_indent = Inches(0.2)
-            para.paragraph_format.space_before = Pt(3)
-            para.paragraph_format.space_after  = Pt(3)
-            _add_para_border(para, 'left', QUOTE_BORDER_COLOR, sz=12)
-            render_inline(para, child.get('children', []), QUOTE)
+            para.paragraph_format.right_indent = Inches(0.35)
+            para.paragraph_format.space_before = Pt(QUOTE_SPACE_BEFORE)
+            para.paragraph_format.space_after  = Pt(QUOTE_SPACE_AFTER)
+            _add_para_border(para, 'left', QUOTE_BORDER_COLOR,
+                             sz=QUOTE_BORDER_WIDTH, space=QUOTE_BORDER_SPACE)
+            if QUOTE_BG_COLOR:
+                _set_para_shading(para, QUOTE_BG_COLOR)
+            render_inline(para, child.get('children', []), QUOTE,
+                          force_no_italic=not QUOTE['italic'])
         elif ct == 'list':
             render_list(doc, child)
         else:
@@ -327,6 +356,7 @@ def render_list_item(doc, item_token, ordered, depth):
     # Separate inline content (from block_text / paragraph) vs. nested lists
     inline_children = None
     nested_lists = []
+    trailing_blocks = []
 
     for child in children:
         ct = child.get('type', '')
@@ -335,13 +365,15 @@ def render_list_item(doc, item_token, ordered, depth):
         elif ct in ('paragraph', 'block_text'):
             if inline_children is None:
                 inline_children = child.get('children', [])
+            else:
+                # Subsequent paragraphs in a loose list item → trailing block
+                trailing_blocks.append(child)
         elif ct == 'blank_line':
             pass
         else:
-            # Directly inline tokens (shouldn't happen, but be safe)
-            if inline_children is None:
-                inline_children = []
-            inline_children.append(child)
+            # Block-level token inside a list item (e.g. heading, table)
+            # Render it after the list item paragraph
+            trailing_blocks.append(child)
 
     if inline_children is None:
         inline_children = []
@@ -370,6 +402,10 @@ def render_list_item(doc, item_token, ordered, depth):
         for nested_item in (nested.get('children') or []):
             if nested_item.get('type') == 'list_item':
                 render_list_item(doc, nested_item, nested_ordered, depth + 1)
+
+    # Render any trailing block-level children (headings, tables, etc.)
+    for block in trailing_blocks:
+        render_block(doc, block)
 
 
 def render_table(doc, token):

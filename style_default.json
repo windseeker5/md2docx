@@ -1,38 +1,38 @@
 {
-  "_comment": "md2docx default style guide — neutral Calibri, no cover page.",
+  "_comment": "md2docx default style guide — Minipass branding. Colors as hex strings (#RRGGBB).",
 
   "document": {
     "page_size": "letter",
     "line_spacing": 1.15,
     "margins": {
-      "top_cm": 2.5, "bottom_cm": 2.5,
+      "top_cm": 2.0, "bottom_cm": 2.0,
       "left_cm": 2.5, "right_cm": 2.5
     }
   },
 
   "fonts": {
-    "body":        "Calibri",
-    "h1_override": "",
-    "cover_title": "Calibri",
-    "footer":      "Calibri"
+    "body":         "Poppins",
+    "h1_override":  "Roboto Slab",
+    "cover_title":  "Poppins",
+    "footer":       "Poppins"
   },
 
   "headings": {
-    "h1": { "size": 16, "color": "#000000", "bold": true,  "italic": false },
-    "h2": { "size": 14, "color": "#1F3864", "bold": true,  "italic": false },
-    "h3": { "size": 12, "color": "#1F3864", "bold": false, "italic": true  },
-    "h4": { "size": 11, "color": "#404040", "bold": false, "italic": true  }
+    "h1": { "size": 20, "color": "#2E3192", "bold": true,  "italic": false },
+    "h2": { "size": 16, "color": "#7B2D8E", "bold": true,  "italic": false },
+    "h3": { "size": 14, "color": "#E91E63", "bold": false, "italic": false },
+    "h4": { "size": 12, "color": "#F7931E", "bold": false, "italic": false }
   },
 
-  "body":        { "size": 11, "color": "#212121" },
-  "blockquote":  { "size": 11, "color": "#555555", "border_color": "#AAAAAA" },
-  "code_inline": { "size": 10, "color": "#333333" },
-  "code_block":  { "size": 10, "color": "#333333" },
+  "body":        { "size": 11, "color": "#434343" },
+  "blockquote":  { "size": 10, "color": "#555555", "italic": false, "border_color": "#A21773", "bg_color": "#FDF0F5", "border_width": 24, "border_space": 10, "space_before": 8, "space_after": 8 },
+  "code_inline": { "size": 10, "color": "#434343" },
+  "code_block":  { "size": 10, "color": "#555555" },
 
   "table": {
-    "header_bg":   "#333333",
+    "header_bg":   "#2E3192",
     "header_text": "#FFFFFF",
-    "body_text":   "#212121",
+    "body_text":   "#434343",
     "header_size": 10,
     "body_size":   10
   },
