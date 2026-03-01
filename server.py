@@ -52,8 +52,12 @@ def convert_markdown_to_docx(
 
     tokens = mistune.create_markdown(renderer="ast", plugins=["table"])(markdown_text)
     doc = converter.setup_document()
+    if converter.COVER_ENABLED:
+        converter.render_cover_page(doc)
     for token in tokens:
         converter.render_block(doc, token)
+    if converter.FOOTER_LABEL:
+        converter.setup_footer(doc)
 
     doc.save(str(out))
     return f"Saved → {out}"

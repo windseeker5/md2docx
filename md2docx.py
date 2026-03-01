@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-md2docx.py — Pure Markdown-to-DOCX converter (no cover page, no footer).
+md2docx.py — Markdown-to-DOCX converter with optional cover page and footer.
 
 Converts standard Markdown (headings, paragraphs, lists, tables, blockquotes,
 code) to a styled .docx document.  All styling is controlled by a JSON style
@@ -20,6 +20,7 @@ from lxml import etree
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+from docx.enum.section import WD_SECTION
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
@@ -45,6 +46,20 @@ QUOTE_BORDER_WIDTH = 12
 QUOTE_BORDER_SPACE = 4   # pt — gap from accent bar to text (inside fill)
 QUOTE_SPACE_BEFORE = 3   # pt — outside the block, above
 QUOTE_SPACE_AFTER  = 3   # pt — outside the block, below
+
+COVER_ENABLED     = False
+COVER_BG_COLOR    = ''
+COVER_LOGO_PATH   = ''
+COVER_LOGO_WIDTH  = 12.0
+COVER_TITLE       = ''
+COVER_TITLE_SIZE  = 48
+COVER_TITLE_COLOR = (0x1A, 0x1A, 0x1A)
+COVER_TOP_SPACER  = 72
+
+FOOTER_LABEL     = ''
+FOOTER_SIZE      = 9
+FOOTER_COLOR     = (0x1A, 0x1A, 0x1A)
+FONT_NAME_FOOTER = 'Calibri'
 
 TABLE_HEADER_BG   = '333333'
 TABLE_HEADER_TEXT = (0xFF, 0xFF, 0xFF)
@@ -78,6 +93,9 @@ def build_style_constants(cfg: dict):
     global TABLE_HEADER_BG, TABLE_HEADER_TEXT, TABLE_HEADER_SIZE
     global TABLE_BODY_TEXT, TABLE_BODY_SIZE
     global DOC_LINE_SPACING, DOC_MARGINS
+    global COVER_ENABLED, COVER_BG_COLOR, COVER_LOGO_PATH, COVER_LOGO_WIDTH, \
+           COVER_TITLE, COVER_TITLE_SIZE, COVER_TITLE_COLOR, COVER_TOP_SPACER
+    global FOOTER_LABEL, FOOTER_SIZE, FOOTER_COLOR, FONT_NAME_FOOTER
 
     FONT_NAME       = cfg['fonts']['body']
     FONT_NAME_SERIF = cfg['fonts'].get('h1_override') or FONT_NAME
@@ -147,6 +165,22 @@ def build_style_constants(cfg: dict):
         'left':   margins.get('left_cm',   2.5),
         'right':  margins.get('right_cm',  2.5),
     }
+
+    cov = cfg.get('cover', {})
+    COVER_ENABLED     = bool(cov.get('enabled', False))
+    COVER_BG_COLOR    = cov.get('bg_color', '').lstrip('#')
+    COVER_LOGO_PATH   = cov.get('logo_path', '')
+    COVER_LOGO_WIDTH  = float(cov.get('logo_width_cm', 12))
+    COVER_TITLE       = cov.get('title', '')
+    COVER_TITLE_SIZE  = int(cov.get('title_size', 48))
+    COVER_TITLE_COLOR = hex_to_rgb(cov.get('title_color', '#1A1A1A'))
+    COVER_TOP_SPACER  = int(cov.get('top_spacer_pt', 72))
+
+    ftr = cfg.get('footer', {})
+    FOOTER_LABEL     = ftr.get('label', '')
+    FOOTER_SIZE      = int(ftr.get('size', 9))
+    FOOTER_COLOR     = hex_to_rgb(ftr.get('color', '#1A1A1A'))
+    FONT_NAME_FOOTER = cfg['fonts'].get('footer', FONT_NAME)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -559,6 +593,72 @@ def setup_document():
     return doc
 
 
+# ── cover page & footer ───────────────────────────────────────────────────────
+
+def render_cover_page(doc):
+    """Insert a cover page as section 0; content follows in section 1."""
+    def _cp(space_before=0, space_after=0, align=None):
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(space_before)
+        p.paragraph_format.space_after  = Pt(space_after)
+        p.paragraph_format.left_indent  = Pt(0)
+        p.paragraph_format.right_indent = Pt(0)
+        if align:
+            p.alignment = align
+        if COVER_BG_COLOR:
+            _set_para_shading(p, COVER_BG_COLOR)
+        return p
+
+    # Top spacer — pushes logo+title down the page
+    _cp(space_before=0, space_after=COVER_TOP_SPACER)
+
+    # Logo
+    if COVER_LOGO_PATH and Path(COVER_LOGO_PATH).exists():
+        p = _cp(space_before=0, space_after=12, align=WD_ALIGN_PARAGRAPH.CENTER)
+        try:
+            p.add_run().add_picture(COVER_LOGO_PATH, width=Cm(COVER_LOGO_WIDTH))
+        except Exception:
+            pass
+
+    # Title
+    if COVER_TITLE:
+        p = _cp(space_before=24, space_after=0, align=WD_ALIGN_PARAGRAPH.CENTER)
+        run = p.add_run(COVER_TITLE)
+        run.font.name      = FONT_NAME_SERIF
+        run.font.size      = Pt(COVER_TITLE_SIZE)
+        run.font.color.rgb = RGBColor(*COVER_TITLE_COLOR)
+        run.font.bold      = True
+
+    # Bottom filler — keeps bg color across the lower half of the page
+    p_fill = _cp(space_before=0, space_after=0)
+    p_fill.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+    p_fill.paragraph_format.line_spacing      = Pt(500)
+
+    # Section break: content starts on a new page (section 1)
+    doc.add_section(WD_SECTION.NEW_PAGE)
+
+    # Tighten cover section margins so paragraph shading reaches the page edges
+    cov_sec               = doc.sections[0]
+    cov_sec.top_margin    = Cm(0.3)
+    cov_sec.bottom_margin = Cm(0.3)
+    cov_sec.left_margin   = Cm(0.3)
+    cov_sec.right_margin  = Cm(0.3)
+
+
+def setup_footer(doc):
+    """Add a centred label footer to the content section (all pages after cover)."""
+    section = doc.sections[-1]
+    footer  = section.footer
+    footer.is_linked_to_previous = False
+
+    para = footer.paragraphs[0]
+    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = para.add_run(FOOTER_LABEL)
+    run.font.name      = FONT_NAME_FOOTER
+    run.font.size      = Pt(FOOTER_SIZE)
+    run.font.color.rgb = RGBColor(*FOOTER_COLOR)
+
+
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -575,8 +675,12 @@ def main():
     tokens = mistune.create_markdown(renderer='ast', plugins=['table'])(
                  Path(args.input).read_text(encoding='utf-8'))
     doc = setup_document()
+    if COVER_ENABLED:
+        render_cover_page(doc)
     for token in tokens:
         render_block(doc, token)
+    if FOOTER_LABEL:
+        setup_footer(doc)
     doc.save(args.output)
     print(f'✓  Saved → {args.output}')
 
