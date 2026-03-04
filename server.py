@@ -9,20 +9,16 @@ Exposes two tools:
 Run via stdio (default) — compatible with Claude Code and Cline.
 """
 
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
-# Ensure md2docx.py is importable regardless of working directory
-sys.path.insert(0, str(Path(__file__).parent))
-
-import importlib
-
-import mistune
 from mcp.server.fastmcp import FastMCP
-import md2docx as converter
 
 mcp = FastMCP("md2docx")
 
+_SCRIPT     = str(Path(__file__).parent / "md2docx.py")
 _DEFAULT_STYLE = str(Path(__file__).parent / "style_default.json")
 
 
@@ -42,23 +38,22 @@ def convert_markdown_to_docx(
     Returns:
         Confirmation message with the saved file path.
     """
-    importlib.reload(converter)
-
-    out = Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-
-    cfg = converter.load_style(style_path)
-    converter.build_style_constants(cfg)
-
-    tokens = mistune.create_markdown(renderer="ast", plugins=["table"])(markdown_text)
-    doc = converter.setup_document()
-    if converter.COVER_ENABLED:
-        converter.render_cover_page(doc)
-    for token in tokens:
-        converter.render_block(doc, token)
-
-    doc.save(str(out))
-    return f"Saved → {out}"
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".md", encoding="utf-8", delete=False
+    )
+    try:
+        tmp.write(markdown_text)
+        tmp.close()
+        result = subprocess.run(
+            [sys.executable, _SCRIPT, tmp.name, output_path, "--style", style_path],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr or result.stdout)
+        return f"Saved → {output_path}"
+    finally:
+        Path(tmp.name).unlink(missing_ok=True)
 
 
 @mcp.tool()
@@ -77,8 +72,14 @@ def convert_md_file_to_docx(
     Returns:
         Confirmation message with the saved file path.
     """
-    md_text = Path(input_path).read_text(encoding="utf-8")
-    return convert_markdown_to_docx(md_text, output_path, style_path)
+    result = subprocess.run(
+        [sys.executable, _SCRIPT, input_path, output_path, "--style", style_path],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr or result.stdout)
+    return f"Saved → {output_path}"
 
 
 if __name__ == "__main__":

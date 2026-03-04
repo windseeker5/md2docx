@@ -53,6 +53,7 @@ COVER_LOGO_PATH   = ''
 COVER_LOGO_WIDTH  = 12.0
 COVER_TITLE       = ''
 COVER_TITLE_SIZE  = 48
+COVER_TITLE_BOLD  = True
 COVER_TITLE_COLOR = (0x1A, 0x1A, 0x1A)
 COVER_TOP_SPACER  = 72
 COVER_FONT        = 'Calibri'
@@ -98,7 +99,7 @@ def build_style_constants(cfg: dict):
     global TABLE_BORDER_COLOR, TABLE_BORDER_SIZE
     global DOC_LINE_SPACING, DOC_MARGINS
     global COVER_ENABLED, COVER_BG_COLOR, COVER_LOGO_PATH, COVER_LOGO_WIDTH, \
-           COVER_TITLE, COVER_TITLE_SIZE, COVER_TITLE_COLOR, COVER_TOP_SPACER, COVER_FONT
+           COVER_TITLE, COVER_TITLE_SIZE, COVER_TITLE_BOLD, COVER_TITLE_COLOR, COVER_TOP_SPACER, COVER_FONT
     global FOOTER_LABEL, FOOTER_SIZE, FOOTER_COLOR, FONT_NAME_FOOTER
 
     FONT_NAME       = cfg['fonts']['body']
@@ -179,6 +180,7 @@ def build_style_constants(cfg: dict):
     COVER_LOGO_WIDTH  = float(cov.get('logo_width_cm', 12))
     COVER_TITLE       = cov.get('title', '')
     COVER_TITLE_SIZE  = int(cov.get('title_size', 48))
+    COVER_TITLE_BOLD  = bool(cov.get('title_bold', True))
     COVER_TITLE_COLOR = hex_to_rgb(cov.get('title_color', '#1A1A1A'))
     COVER_TOP_SPACER  = int(cov.get('top_spacer_pt', 72))
     COVER_FONT        = cfg['fonts'].get('cover_title', FONT_NAME)
@@ -220,6 +222,9 @@ def _set_table_borders(tbl, color_hex, size_pt):
     if tblPr is None:
         tblPr = OxmlElement('w:tblPr')
         tbl._tbl.insert(0, tblPr)
+    # Remove any existing tblBorders (Table Grid style injects one; we must replace it)
+    for existing in tblPr.findall(qn('w:tblBorders')):
+        tblPr.remove(existing)
     tblBdr = OxmlElement('w:tblBorders')
     for side in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
         edge = OxmlElement(f'w:{side}')
@@ -758,7 +763,7 @@ def render_cover_page(doc):
         run = title.add_run(COVER_TITLE)
         run.font.name      = COVER_FONT
         run.font.size      = Pt(COVER_TITLE_SIZE)
-        run.font.bold      = True
+        run.font.bold      = COVER_TITLE_BOLD
         run.font.color.rgb = RGBColor(*COVER_TITLE_COLOR)
 
     # Page break — content starts on next page (same section, titlePg suppresses footer here)

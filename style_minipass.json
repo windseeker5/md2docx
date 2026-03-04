@@ -1,5 +1,5 @@
 {
-  "_comment": "md2docx default style guide — Minipass branding. Colors as hex strings (#RRGGBB).",
+  "_comment": "md_to_docx style guide — Minipass branding. Colors as hex strings (#RRGGBB).",
 
   "document": {
     "page_size": "letter",
@@ -30,13 +30,11 @@
   "code_block":  { "size": 10, "color": "#555555" },
 
   "table": {
-    "header_bg":    "#2E3192",
-    "header_text":  "#FFFFFF",
-    "body_text":    "#434343",
-    "header_size":  10,
-    "body_size":    10,
-    "border_color": "#d1d1d1",
-    "border_size":  1
+    "header_bg":   "#2E3192",
+    "header_text": "#FFFFFF",
+    "body_text":   "#434343",
+    "header_size": 10,
+    "body_size":   10
   },
 
   "cover": {
