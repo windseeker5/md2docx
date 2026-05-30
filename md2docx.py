@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-md2docx.py — Markdown-to-DOCX converter with optional cover page and footer.
+md2docx.py — Convert Markdown to a styled .docx document.
 
-Converts standard Markdown (headings, paragraphs, lists, tables, blockquotes,
-code) to a styled .docx document.  All styling is controlled by a JSON style
-file; the bundled style_default.json uses neutral Calibri defaults.
+Supports:
+- cover page
+- footer with label + page number
+- headings, paragraphs, lists, tables, blockquotes, code
+
+All styling is controlled by a JSON style file.
 
 Usage:
   python md2docx.py input.md output.docx
@@ -20,14 +23,13 @@ from lxml import etree
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
-from docx.enum.section import WD_SECTION
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
 # ── style constants (defaults; overwritten by build_style_constants) ──────────
 
-FONT_NAME       = 'Calibri'
-FONT_NAME_SERIF = 'Calibri'   # H1 override (same unless style sets h1_override)
+FONT_NAME       = 'Poppins'
+FONT_NAME_SERIF = 'Roboto Slab'
 
 HEADING_STYLES = {
     1: {'size': 16, 'color': (0x00, 0x00, 0x00), 'bold': True,  'italic': False},
@@ -40,39 +42,34 @@ QUOTE       = {'size': 11, 'color': (0x55, 0x55, 0x55), 'bold': False, 'italic':
 CODE_INLINE = {'size': 10, 'color': (0x33, 0x33, 0x33), 'bold': False, 'italic': False}
 CODE_BLOCK  = {'size': 10, 'color': (0x33, 0x33, 0x33)}
 
-QUOTE_BORDER_COLOR = 'AAAAAA'
-QUOTE_BG_COLOR     = ''
-QUOTE_BORDER_WIDTH = 12
-QUOTE_BORDER_SPACE = 4   # pt — gap from accent bar to text (inside fill)
-QUOTE_SPACE_BEFORE = 3   # pt — outside the block, above
-QUOTE_SPACE_AFTER  = 3   # pt — outside the block, below
+QUOTE_BORDER_COLOR = 'A21773'
+QUOTE_BG_COLOR = None
 
-COVER_ENABLED     = False
-COVER_BG_COLOR    = ''
-COVER_LOGO_PATH   = ''
-COVER_LOGO_WIDTH  = 12.0
-COVER_TITLE       = ''
-COVER_TITLE_SIZE  = 48
-COVER_TITLE_BOLD  = True
-COVER_TITLE_COLOR = (0x1A, 0x1A, 0x1A)
-COVER_TOP_SPACER  = 72
-COVER_FONT        = 'Calibri'
-
-FOOTER_LABEL     = ''
-FOOTER_SIZE      = 9
-FOOTER_COLOR     = (0x1A, 0x1A, 0x1A)
-FONT_NAME_FOOTER = 'Calibri'
-
-TABLE_HEADER_BG     = '333333'
-TABLE_HEADER_TEXT   = (0xFF, 0xFF, 0xFF)
-TABLE_HEADER_SIZE   = 10
-TABLE_BODY_TEXT     = (0x21, 0x21, 0x21)
-TABLE_BODY_SIZE     = 10
-TABLE_BORDER_COLOR  = 'CCCCCC'
-TABLE_BORDER_SIZE   = 1
+TABLE_HEADER_BG   = '2E3192'
+TABLE_HEADER_TEXT = (0xFF, 0xFF, 0xFF)
+TABLE_HEADER_SIZE = 10
+TABLE_BODY_TEXT   = (0x43, 0x43, 0x43)
+TABLE_BODY_SIZE   = 10
+TABLE_BORDER_COLOR = 'D9D9D9'
 
 DOC_LINE_SPACING = 1.15
-DOC_MARGINS      = {'top': 2.5, 'bottom': 2.5, 'left': 2.5, 'right': 2.5}
+DOC_MARGINS      = {'top': 2.0, 'bottom': 2.0, 'left': 2.5, 'right': 2.5}
+RENDER_THEMATIC_BREAKS = False
+
+COVER_ENABLED = True
+COVER_BG_COLOR = 'D0F5EE'
+COVER_LOGO_PATH = Path('/home/kdresdell/Downloads/minipass.png')
+COVER_LOGO_WIDTH_CM = 12
+COVER_FONT = 'Poppins'
+COVER_TITLE = "Plan d'Affaires"
+COVER_TITLE_SIZE = 48
+COVER_TITLE_COLOR = (0x1A, 0x1A, 0x1A)
+COVER_TOP_SPACER_PT = 72
+
+FOOTER_LABEL = "Confidentiel — Plan d’affaires minipass.me"
+FOOTER_FONT = 'Poppins'
+FOOTER_SIZE = 9
+FOOTER_COLOR_HEX = '1A1A1A'
 
 
 # ── style loading ─────────────────────────────────────────────────────────────
@@ -92,15 +89,13 @@ def hex_to_rgb(h: str) -> tuple:
 def build_style_constants(cfg: dict):
     """Populate module-level style constants from a loaded JSON style dict."""
     global FONT_NAME, FONT_NAME_SERIF, HEADING_STYLES, NORMAL, QUOTE, CODE_INLINE, CODE_BLOCK
-    global QUOTE_BORDER_COLOR, QUOTE_BG_COLOR, QUOTE_BORDER_WIDTH, \
-           QUOTE_BORDER_SPACE, QUOTE_SPACE_BEFORE, QUOTE_SPACE_AFTER
+    global QUOTE_BORDER_COLOR, QUOTE_BG_COLOR
     global TABLE_HEADER_BG, TABLE_HEADER_TEXT, TABLE_HEADER_SIZE
-    global TABLE_BODY_TEXT, TABLE_BODY_SIZE
-    global TABLE_BORDER_COLOR, TABLE_BORDER_SIZE
-    global DOC_LINE_SPACING, DOC_MARGINS
-    global COVER_ENABLED, COVER_BG_COLOR, COVER_LOGO_PATH, COVER_LOGO_WIDTH, \
-           COVER_TITLE, COVER_TITLE_SIZE, COVER_TITLE_BOLD, COVER_TITLE_COLOR, COVER_TOP_SPACER, COVER_FONT
-    global FOOTER_LABEL, FOOTER_SIZE, FOOTER_COLOR, FONT_NAME_FOOTER
+    global TABLE_BODY_TEXT, TABLE_BODY_SIZE, TABLE_BORDER_COLOR
+    global DOC_LINE_SPACING, DOC_MARGINS, RENDER_THEMATIC_BREAKS
+    global COVER_ENABLED, COVER_BG_COLOR, COVER_LOGO_PATH, COVER_LOGO_WIDTH_CM
+    global COVER_FONT, COVER_TITLE, COVER_TITLE_SIZE, COVER_TITLE_COLOR, COVER_TOP_SPACER_PT
+    global FOOTER_LABEL, FOOTER_FONT, FOOTER_SIZE, FOOTER_COLOR_HEX
 
     FONT_NAME       = cfg['fonts']['body']
     FONT_NAME_SERIF = cfg['fonts'].get('h1_override') or FONT_NAME
@@ -131,14 +126,11 @@ def build_style_constants(cfg: dict):
         'size':   bq.get('size', 11),
         'color':  hex_to_rgb(bq.get('color', '#555555')),
         'bold':   False,
-        'italic': bq.get('italic', True),
+        'italic': True,
     }
-    QUOTE_BORDER_COLOR = bq.get('border_color', '#AAAAAA').lstrip('#')
-    QUOTE_BG_COLOR     = bq.get('bg_color', '').lstrip('#')
-    QUOTE_BORDER_WIDTH = int(bq.get('border_width', 12))
-    QUOTE_BORDER_SPACE = int(bq.get('border_space', 4))
-    QUOTE_SPACE_BEFORE = int(bq.get('space_before', 3))
-    QUOTE_SPACE_AFTER  = int(bq.get('space_after',  3))
+    QUOTE_BORDER_COLOR = bq.get('border_color', '#A21773').lstrip('#')
+    quote_bg = bq.get('bg_color')
+    QUOTE_BG_COLOR = quote_bg.lstrip('#') if quote_bg else None
 
     ci = cfg.get('code_inline', {})
     CODE_INLINE = {
@@ -155,16 +147,33 @@ def build_style_constants(cfg: dict):
     }
 
     tbl = cfg.get('table', {})
-    TABLE_HEADER_BG    = tbl.get('header_bg',    '#333333').lstrip('#')
-    TABLE_HEADER_TEXT  = hex_to_rgb(tbl.get('header_text', '#FFFFFF'))
-    TABLE_HEADER_SIZE  = tbl.get('header_size', 10)
-    TABLE_BODY_TEXT    = hex_to_rgb(tbl.get('body_text',   '#212121'))
-    TABLE_BODY_SIZE    = tbl.get('body_size',   10)
-    TABLE_BORDER_COLOR = tbl.get('border_color', '#CCCCCC').lstrip('#')
-    TABLE_BORDER_SIZE  = float(tbl.get('border_size', 1))
+    TABLE_HEADER_BG   = tbl.get('header_bg',   '#2E3192').lstrip('#')
+    TABLE_HEADER_TEXT = hex_to_rgb(tbl.get('header_text', '#FFFFFF'))
+    TABLE_HEADER_SIZE = tbl.get('header_size', 10)
+    TABLE_BODY_TEXT   = hex_to_rgb(tbl.get('body_text',   '#434343'))
+    TABLE_BODY_SIZE   = tbl.get('body_size',   10)
+    TABLE_BORDER_COLOR = tbl.get('border_color', '#D9D9D9').lstrip('#')
+
+    cov = cfg.get('cover', {})
+    COVER_ENABLED       = cov.get('enabled',       False)
+    COVER_BG_COLOR      = cov.get('bg_color',      '#FFFFFF').lstrip('#')
+    COVER_LOGO_PATH     = Path(cov.get('logo_path', ''))
+    COVER_LOGO_WIDTH_CM = cov.get('logo_width_cm', 10)
+    COVER_FONT          = cfg['fonts'].get('cover_title', FONT_NAME)
+    COVER_TITLE         = cov.get('title',         '')
+    COVER_TITLE_SIZE    = cov.get('title_size',    36)
+    COVER_TITLE_COLOR   = hex_to_rgb(cov.get('title_color', '#000000'))
+    COVER_TOP_SPACER_PT = cov.get('top_spacer_pt', 72)
+
+    ftr = cfg.get('footer', {})
+    FOOTER_LABEL     = ftr.get('label', '')
+    FOOTER_FONT      = cfg['fonts'].get('footer', FONT_NAME)
+    FOOTER_SIZE      = ftr.get('size',  9)
+    FOOTER_COLOR_HEX = ftr.get('color', '#000000').lstrip('#')
 
     doc_cfg = cfg.get('document', {})
     DOC_LINE_SPACING = doc_cfg.get('line_spacing', 1.15)
+    RENDER_THEMATIC_BREAKS = doc_cfg.get('render_thematic_breaks', False)
     margins = doc_cfg.get('margins', {})
     DOC_MARGINS = {
         'top':    margins.get('top_cm',    2.5),
@@ -172,24 +181,6 @@ def build_style_constants(cfg: dict):
         'left':   margins.get('left_cm',   2.5),
         'right':  margins.get('right_cm',  2.5),
     }
-
-    cov = cfg.get('cover', {})
-    COVER_ENABLED     = bool(cov.get('enabled', False))
-    COVER_BG_COLOR    = cov.get('bg_color', '').lstrip('#')
-    COVER_LOGO_PATH   = cov.get('logo_path', '')
-    COVER_LOGO_WIDTH  = float(cov.get('logo_width_cm', 12))
-    COVER_TITLE       = cov.get('title', '')
-    COVER_TITLE_SIZE  = int(cov.get('title_size', 48))
-    COVER_TITLE_BOLD  = bool(cov.get('title_bold', True))
-    COVER_TITLE_COLOR = hex_to_rgb(cov.get('title_color', '#1A1A1A'))
-    COVER_TOP_SPACER  = int(cov.get('top_spacer_pt', 72))
-    COVER_FONT        = cfg['fonts'].get('cover_title', FONT_NAME)
-
-    ftr = cfg.get('footer', {})
-    FOOTER_LABEL     = ftr.get('label', '')
-    FOOTER_SIZE      = int(ftr.get('size', 9))
-    FOOTER_COLOR     = hex_to_rgb(ftr.get('color', '#1A1A1A'))
-    FONT_NAME_FOOTER = cfg['fonts'].get('footer', FONT_NAME)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -214,49 +205,47 @@ def _set_cell_bg(cell, hex_color):
     tcPr.append(shd)
 
 
-def _set_table_borders(tbl, color_hex, size_pt):
-    """Apply uniform borders to all sides of a table (color + thickness)."""
-    sz_val = str(max(1, int(round(size_pt * 8))))  # pts → eighth-points
-    color  = color_hex.lstrip('#').upper()
-    tblPr = tbl._tbl.find(qn('w:tblPr'))
-    if tblPr is None:
-        tblPr = OxmlElement('w:tblPr')
-        tbl._tbl.insert(0, tblPr)
-    # Remove any existing tblBorders (Table Grid style injects one; we must replace it)
-    for existing in tblPr.findall(qn('w:tblBorders')):
-        tblPr.remove(existing)
-    tblBdr = OxmlElement('w:tblBorders')
-    for side in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
-        edge = OxmlElement(f'w:{side}')
-        edge.set(qn('w:val'),   'single')
-        edge.set(qn('w:sz'),    sz_val)
-        edge.set(qn('w:space'), '0')
-        edge.set(qn('w:color'), color)
-        tblBdr.append(edge)
-    tblPr.append(tblBdr)
-
-
-def _add_para_border(para, side, color_hex, sz=6, space=4):
+def _add_para_border(para, side, color_hex, sz=6):
     """Add a single-line border on one side of a paragraph."""
     pPr  = para._p.get_or_add_pPr()
     pBdr = OxmlElement('w:pBdr')
     edge = OxmlElement(f'w:{side}')
     edge.set(qn('w:val'),   'single')
     edge.set(qn('w:sz'),    str(sz))
-    edge.set(qn('w:space'), str(space))
+    edge.set(qn('w:space'), '4')
     edge.set(qn('w:color'), color_hex)
     pBdr.append(edge)
     pPr.append(pBdr)
 
 
-def _set_para_shading(para, fill_hex: str):
-    """Set paragraph background fill color (OOXML w:shd)."""
+def _set_para_bg(para, hex_color):
+    """Set paragraph background colour via raw XML."""
     pPr = para._p.get_or_add_pPr()
     shd = OxmlElement('w:shd')
-    shd.set(qn('w:val'),   'clear')
+    shd.set(qn('w:val'), 'clear')
     shd.set(qn('w:color'), 'auto')
-    shd.set(qn('w:fill'),  fill_hex.upper())
+    shd.set(qn('w:fill'), hex_color)
     pPr.append(shd)
+
+
+def _set_table_borders(table, hex_color):
+    """Set all table borders to a specific color."""
+    tbl = table._tbl
+    tbl_pr = tbl.tblPr
+    borders = tbl_pr.first_child_found_in('w:tblBorders')
+    if borders is None:
+        borders = OxmlElement('w:tblBorders')
+        tbl_pr.append(borders)
+
+    for edge_name in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+        edge = borders.find(qn(f'w:{edge_name}'))
+        if edge is None:
+            edge = OxmlElement(f'w:{edge_name}')
+            borders.append(edge)
+        edge.set(qn('w:val'), 'single')
+        edge.set(qn('w:sz'), '4')
+        edge.set(qn('w:space'), '0')
+        edge.set(qn('w:color'), hex_color)
 
 
 def _add_linebreak(para):
@@ -266,9 +255,127 @@ def _add_linebreak(para):
     run._r.append(br)
 
 
+def _add_page_numbers(section):
+    """Footer: left label, right page number."""
+    footer = section.footer
+    ftr = footer._element
+
+    for child in list(ftr):
+        ftr.remove(child)
+
+    sz_hhp = FOOTER_SIZE * 2
+    rpr = (
+        '<w:rPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        f'<w:rFonts w:ascii="{FOOTER_FONT}" w:hAnsi="{FOOTER_FONT}"/>'
+        f'<w:sz w:val="{sz_hhp}"/>'
+        f'<w:color w:val="{FOOTER_COLOR_HEX}"/>'
+        '</w:rPr>'
+    )
+
+    xml = (
+        '<w:tbl xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        '<w:tblPr>'
+        '<w:tblW w:w="5000" w:type="pct"/>'
+        '<w:tblBorders>'
+        '<w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        '<w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        '<w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        '<w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        '<w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        '<w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        '</w:tblBorders>'
+        '</w:tblPr>'
+        '<w:tr>'
+        '<w:tc>'
+        '<w:tcPr><w:tcW w:w="4250" w:type="pct"/></w:tcPr>'
+        '<w:p><w:pPr><w:jc w:val="left"/></w:pPr>'
+        f'<w:r>{rpr}<w:t xml:space="preserve">{FOOTER_LABEL}</w:t></w:r>'
+        '</w:p></w:tc>'
+        '<w:tc>'
+        '<w:tcPr><w:tcW w:w="750" w:type="pct"/></w:tcPr>'
+        '<w:p><w:pPr><w:jc w:val="right"/></w:pPr>'
+        f'<w:r>{rpr}<w:fldChar w:fldCharType="begin"/></w:r>'
+        f'<w:r>{rpr}<w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>'
+        f'<w:r>{rpr}<w:fldChar w:fldCharType="end"/></w:r>'
+        '</w:p></w:tc>'
+        '</w:tr></w:tbl>'
+        '<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>'
+    )
+
+    for elem in etree.fromstring(f'<root>{xml}</root>'):
+        ftr.append(elem)
+
+
+def _add_cover_background(doc, para):
+    """Insert a full-page solid rectangle behind cover content."""
+    sec = doc.sections[0]
+    cx = int(sec.page_width) if sec.page_width else 7560000
+    cy = int(sec.page_height) if sec.page_height else 10692000
+
+    xml = (
+        f'<w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+        f'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+        f'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+        f'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">'
+        '<w:drawing>'
+        '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" '
+        'behindDoc="1" locked="1" layoutInCell="1" allowOverlap="0">'
+        '<wp:simplePos x="0" y="0"/>'
+        '<wp:positionH relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionH>'
+        '<wp:positionV relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionV>'
+        f'<wp:extent cx="{cx}" cy="{cy}"/>'
+        '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
+        '<wp:wrapNone/>'
+        '<wp:docPr id="1001" name="CoverBg"/>'
+        '<wp:cNvGraphicFramePr/>'
+        '<a:graphic>'
+        '<a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">'
+        '<wps:wsp>'
+        '<wps:cNvSpPr><a:spLocks noChangeArrowheads="1"/></wps:cNvSpPr>'
+        '<wps:spPr>'
+        f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
+        '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
+        f'<a:solidFill><a:srgbClr val="{COVER_BG_COLOR}"/></a:solidFill>'
+        '<a:ln><a:noFill/></a:ln>'
+        '</wps:spPr><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic>'
+        '</wp:anchor></w:drawing></w:r>'
+    )
+    para._p.append(etree.fromstring(xml))
+
+
+def render_cover_page(doc):
+    """Insert styled cover page (logo + title)."""
+    sp = doc.add_paragraph()
+    sp.paragraph_format.space_before = Pt(COVER_TOP_SPACER_PT)
+    sp.paragraph_format.space_after = Pt(0)
+    _add_cover_background(doc, sp)
+
+    logo_para = doc.add_paragraph()
+    logo_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    logo_para.paragraph_format.space_before = Pt(0)
+    logo_para.paragraph_format.space_after = Pt(48)
+    if COVER_LOGO_PATH.exists():
+        run = logo_para.add_run()
+        run.add_picture(str(COVER_LOGO_PATH), width=Cm(COVER_LOGO_WIDTH_CM))
+
+    title = doc.add_paragraph()
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = title.add_run(COVER_TITLE)
+    run.font.name = COVER_FONT
+    run.font.size = Pt(COVER_TITLE_SIZE)
+    run.font.bold = True
+    run.font.color.rgb = RGBColor(*COVER_TITLE_COLOR)
+
+    brk = doc.add_paragraph()
+    run = brk.add_run()
+    br = OxmlElement('w:br')
+    br.set(qn('w:type'), 'page')
+    run._r.append(br)
+
+
 # ── inline renderer ──────────────────────────────────────────────────────────
 
-def render_inline(para, children, style, bold=False, italic=False, force_no_italic=False):
+def render_inline(para, children, style, bold=False, italic=False):
     """Recursively walk mistune inline AST nodes and add formatted runs."""
     for token in (children or []):
         t = token.get('type', '')
@@ -292,19 +399,16 @@ def render_inline(para, children, style, bold=False, italic=False, force_no_ital
 
         elif t == 'strong':
             render_inline(para, token.get('children', []), style,
-                          bold=True, italic=italic,
-                          force_no_italic=force_no_italic)
+                          bold=True, italic=italic)
 
         elif t == 'emphasis':
             render_inline(para, token.get('children', []), style,
-                          bold=bold, italic=(False if force_no_italic else True),
-                          force_no_italic=force_no_italic)
+                          bold=bold, italic=True)
 
         elif t == 'link':
             # Render link text (no click-through needed)
             render_inline(para, token.get('children', []), style,
-                          bold=bold, italic=italic,
-                          force_no_italic=force_no_italic)
+                          bold=bold, italic=italic)
 
         elif t == 'image':
             # Skip image references silently
@@ -339,8 +443,7 @@ def render_inline(para, children, style, bold=False, italic=False, force_no_ital
                            italic=(style['italic'] or italic))
             elif token.get('children'):
                 render_inline(para, token['children'], style,
-                              bold=bold, italic=italic,
-                              force_no_italic=force_no_italic)
+                              bold=bold, italic=italic)
 
 
 # ── block renderers ──────────────────────────────────────────────────────────
@@ -383,22 +486,21 @@ def render_paragraph(doc, children):
     render_inline(para, children, NORMAL)
 
 
-def render_blockquote(doc, children):
+def render_blockquote(doc, children, extra_space_after_table=False):
     """Blockquote → indented italic paragraph with left border."""
+    space_after = 11 if extra_space_after_table else 3
     for child in (children or []):
         ct = child.get('type', '')
         if ct in ('paragraph', 'block_text'):
             para = doc.add_paragraph()
             para.paragraph_format.left_indent  = Inches(0.35)
-            para.paragraph_format.right_indent = Inches(0.35)
-            para.paragraph_format.space_before = Pt(QUOTE_SPACE_BEFORE)
-            para.paragraph_format.space_after  = Pt(QUOTE_SPACE_AFTER)
-            _add_para_border(para, 'left', QUOTE_BORDER_COLOR,
-                             sz=QUOTE_BORDER_WIDTH, space=QUOTE_BORDER_SPACE)
+            para.paragraph_format.right_indent = Inches(0.2)
+            para.paragraph_format.space_before = Pt(3)
+            para.paragraph_format.space_after  = Pt(space_after)
             if QUOTE_BG_COLOR:
-                _set_para_shading(para, QUOTE_BG_COLOR)
-            render_inline(para, child.get('children', []), QUOTE,
-                          force_no_italic=not QUOTE['italic'])
+                _set_para_bg(para, QUOTE_BG_COLOR)
+            _add_para_border(para, 'left', QUOTE_BORDER_COLOR, sz=12)
+            render_inline(para, child.get('children', []), QUOTE)
         elif ct == 'list':
             render_list(doc, child)
         else:
@@ -421,7 +523,6 @@ def render_list_item(doc, item_token, ordered, depth):
     # Separate inline content (from block_text / paragraph) vs. nested lists
     inline_children = None
     nested_lists = []
-    trailing_blocks = []
 
     for child in children:
         ct = child.get('type', '')
@@ -430,15 +531,13 @@ def render_list_item(doc, item_token, ordered, depth):
         elif ct in ('paragraph', 'block_text'):
             if inline_children is None:
                 inline_children = child.get('children', [])
-            else:
-                # Subsequent paragraphs in a loose list item → trailing block
-                trailing_blocks.append(child)
         elif ct == 'blank_line':
             pass
         else:
-            # Block-level token inside a list item (e.g. heading, table)
-            # Render it after the list item paragraph
-            trailing_blocks.append(child)
+            # Directly inline tokens (shouldn't happen, but be safe)
+            if inline_children is None:
+                inline_children = []
+            inline_children.append(child)
 
     if inline_children is None:
         inline_children = []
@@ -468,10 +567,6 @@ def render_list_item(doc, item_token, ordered, depth):
             if nested_item.get('type') == 'list_item':
                 render_list_item(doc, nested_item, nested_ordered, depth + 1)
 
-    # Render any trailing block-level children (headings, tables, etc.)
-    for block in trailing_blocks:
-        render_block(doc, block)
-
 
 def render_table(doc, token):
     """Build a DOCX table from a mistune table token."""
@@ -500,7 +595,7 @@ def render_table(doc, token):
 
     tbl = doc.add_table(rows=len(all_rows), cols=num_cols)
     tbl.style = 'Table Grid'
-    _set_table_borders(tbl, TABLE_BORDER_COLOR, TABLE_BORDER_SIZE)
+    _set_table_borders(tbl, TABLE_BORDER_COLOR)
 
     for r_idx, row_cells in enumerate(all_rows):
         is_header = r_idx < len(head_rows)
@@ -562,7 +657,7 @@ def render_code_block(doc, token):
 
 # ── top-level dispatcher ─────────────────────────────────────────────────────
 
-def render_block(doc, token):
+def render_block(doc, token, next_type=None):
     t        = token.get('type', '')
     children = token.get('children') or []
     attrs    = token.get('attrs')   or {}
@@ -574,7 +669,7 @@ def render_block(doc, token):
         render_paragraph(doc, children)
 
     elif t == 'block_quote':
-        render_blockquote(doc, children)
+        render_blockquote(doc, children, extra_space_after_table=(next_type == 'table'))
 
     elif t == 'list':
         render_list(doc, token)
@@ -583,7 +678,8 @@ def render_block(doc, token):
         render_table(doc, token)
 
     elif t == 'thematic_break':
-        render_hr(doc)
+        if RENDER_THEMATIC_BREAKS:
+            render_hr(doc)
 
     elif t == 'block_code':
         render_code_block(doc, token)
@@ -600,12 +696,22 @@ def render_block(doc, token):
             render_block(doc, child)
 
 
+def _next_nonblank_type(tokens, start_idx):
+    """Return the next non-blank token type after start_idx."""
+    j = start_idx + 1
+    while j < len(tokens):
+        t = tokens[j].get('type', '')
+        if t != 'blank_line':
+            return t
+        j += 1
+    return None
+
+
 # ── document setup ────────────────────────────────────────────────────────────
 
 def setup_document():
     doc = Document()
 
-    # Remove the default empty paragraph Document() creates (if present)
     if doc.paragraphs:
         doc.paragraphs[0]._element.getparent().remove(doc.paragraphs[0]._element)
 
@@ -622,156 +728,16 @@ def setup_document():
     normal_style.paragraph_format.line_spacing_rule = WD_LINE_SPACING.MULTIPLE
     normal_style.paragraph_format.line_spacing      = DOC_LINE_SPACING
 
-    # "Different first page" — suppresses footer on cover page
-    if COVER_ENABLED:
-        sectPr    = sec._sectPr
-        titlePg   = OxmlElement('w:titlePg')
-        sectPr.append(titlePg)
-        # Page counter starts at 0 so cover = 0 (hidden) and first content page = 1
-        pgNumType = OxmlElement('w:pgNumType')
-        pgNumType.set(qn('w:start'), '0')
-        sectPr.append(pgNumType)
+    sect_pr = sec._sectPr
+    title_pg = OxmlElement('w:titlePg')
+    sect_pr.append(title_pg)
+    pg_num_type = OxmlElement('w:pgNumType')
+    pg_num_type.set(qn('w:start'), '0')
+    sect_pr.append(pg_num_type)
 
-    if FOOTER_LABEL:
-        _add_page_numbers(sec)
+    _add_page_numbers(sec)
 
     return doc
-
-
-# ── cover page & footer ───────────────────────────────────────────────────────
-
-def _add_cover_background(doc, para):
-    """Insert a full-page solid-color rectangle anchored behind the cover text."""
-    sec = doc.sections[0]
-    cx  = int(sec.page_width)  if sec.page_width  else 7560000
-    cy  = int(sec.page_height) if sec.page_height else 10692000
-    xml = (
-        f'<w:r'
-        f' xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
-        f' xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"'
-        f' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
-        f' xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">'
-        f'<w:drawing>'
-        f'<wp:anchor distT="0" distB="0" distL="0" distR="0"'
-        f' simplePos="0" relativeHeight="1" behindDoc="1"'
-        f' locked="1" layoutInCell="1" allowOverlap="0">'
-        f'<wp:simplePos x="0" y="0"/>'
-        f'<wp:positionH relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionH>'
-        f'<wp:positionV relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionV>'
-        f'<wp:extent cx="{cx}" cy="{cy}"/>'
-        f'<wp:effectExtent l="0" t="0" r="0" b="0"/>'
-        f'<wp:wrapNone/>'
-        f'<wp:docPr id="1001" name="CoverBg"/>'
-        f'<wp:cNvGraphicFramePr/>'
-        f'<a:graphic>'
-        f'<a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">'
-        f'<wps:wsp>'
-        f'<wps:cNvSpPr><a:spLocks noChangeArrowheads="1"/></wps:cNvSpPr>'
-        f'<wps:spPr>'
-        f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
-        f'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
-        f'<a:solidFill><a:srgbClr val="{COVER_BG_COLOR}"/></a:solidFill>'
-        f'<a:ln><a:noFill/></a:ln>'
-        f'</wps:spPr>'
-        f'<wps:bodyPr/>'
-        f'</wps:wsp>'
-        f'</a:graphicData>'
-        f'</a:graphic>'
-        f'</wp:anchor>'
-        f'</w:drawing>'
-        f'</w:r>'
-    )
-    para._p.append(etree.fromstring(xml))
-
-
-def _add_page_numbers(section):
-    """Footer: left label + right PAGE field, no borders."""
-    footer = section.footer
-    ftr    = footer._element
-    for child in list(ftr):
-        ftr.remove(child)
-
-    sz_hhp           = FOOTER_SIZE * 2
-    footer_color_hex = '%02X%02X%02X' % FOOTER_COLOR
-    rpr = (
-        '<w:rPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-        f'<w:rFonts w:ascii="{FONT_NAME_FOOTER}" w:hAnsi="{FONT_NAME_FOOTER}"/>'
-        f'<w:sz w:val="{sz_hhp}"/>'
-        f'<w:color w:val="{footer_color_hex}"/>'
-        '</w:rPr>'
-    )
-    xml = (
-        '<w:tbl xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-        '<w:tblPr>'
-        '<w:tblW w:w="5000" w:type="pct"/>'
-        '<w:tblBorders>'
-        '<w:top    w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
-        '<w:left   w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
-        '<w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
-        '<w:right  w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
-        '<w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
-        '<w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
-        '</w:tblBorders>'
-        '</w:tblPr>'
-        '<w:tr>'
-        '<w:tc>'
-        '<w:tcPr><w:tcW w:w="4250" w:type="pct"/></w:tcPr>'
-        '<w:p><w:pPr><w:jc w:val="left"/></w:pPr>'
-        f'<w:r>{rpr}<w:t xml:space="preserve">{FOOTER_LABEL}</w:t></w:r>'
-        '</w:p></w:tc>'
-        '<w:tc>'
-        '<w:tcPr><w:tcW w:w="750" w:type="pct"/></w:tcPr>'
-        '<w:p><w:pPr><w:jc w:val="right"/></w:pPr>'
-        f'<w:r>{rpr}<w:fldChar w:fldCharType="begin"/></w:r>'
-        f'<w:r>{rpr}<w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>'
-        f'<w:r>{rpr}<w:fldChar w:fldCharType="end"/></w:r>'
-        '</w:p></w:tc>'
-        '</w:tr>'
-        '</w:tbl>'
-        '<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>'
-    )
-    for elem in etree.fromstring(f'<root>{xml}</root>'):
-        ftr.append(elem)
-
-
-def render_cover_page(doc):
-    """Insert a styled cover page (full-bg rect + logo + title) before main content."""
-    # Top spacer — background rectangle is anchored inside this paragraph
-    sp = doc.add_paragraph()
-    sp.paragraph_format.space_before = Pt(COVER_TOP_SPACER)
-    sp.paragraph_format.space_after  = Pt(0)
-    if COVER_BG_COLOR:
-        _add_cover_background(doc, sp)
-
-    # Logo — centered
-    logo_para = doc.add_paragraph()
-    logo_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    logo_para.paragraph_format.space_before = Pt(0)
-    logo_para.paragraph_format.space_after  = Pt(48)
-    if COVER_LOGO_PATH and Path(COVER_LOGO_PATH).exists():
-        try:
-            logo_para.add_run().add_picture(COVER_LOGO_PATH, width=Cm(COVER_LOGO_WIDTH))
-        except Exception:
-            pass
-
-    # Title
-    if COVER_TITLE:
-        title = doc.add_paragraph()
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        title.paragraph_format.space_before = Pt(0)
-        title.paragraph_format.space_after  = Pt(0)
-        run = title.add_run(COVER_TITLE)
-        run.font.name      = COVER_FONT
-        run.font.size      = Pt(COVER_TITLE_SIZE)
-        run.font.bold      = COVER_TITLE_BOLD
-        run.font.color.rgb = RGBColor(*COVER_TITLE_COLOR)
-
-    # Page break — content starts on next page (same section, titlePg suppresses footer here)
-    brk = doc.add_paragraph()
-    run = brk.add_run()
-    br  = OxmlElement('w:br')
-    br.set(qn('w:type'), 'page')
-    run._r.append(br)
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
@@ -781,8 +747,8 @@ def main():
     parser.add_argument('input',  help='Input .md file')
     parser.add_argument('output', help='Output .docx file')
     parser.add_argument('--style', '-s',
-                        default=str(Path(__file__).parent / 'style_default.json'),
-                        help='JSON style guide (default: style_default.json)')
+                        default=str(Path(__file__).parent / 'style_minipass.json'),
+                        help='JSON style guide (default: style_minipass.json)')
     args = parser.parse_args()
 
     cfg    = load_style(args.style)
@@ -792,8 +758,9 @@ def main():
     doc = setup_document()
     if COVER_ENABLED:
         render_cover_page(doc)
-    for token in tokens:
-        render_block(doc, token)
+    for idx, token in enumerate(tokens):
+        next_type = _next_nonblank_type(tokens, idx)
+        render_block(doc, token, next_type=next_type)
     doc.save(args.output)
     print(f'✓  Saved → {args.output}')
 
