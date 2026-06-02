@@ -19,7 +19,7 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("md2docx")
 
 _SCRIPT     = str(Path(__file__).parent / "md2docx.py")
-_DEFAULT_STYLE = str(Path(__file__).parent / "style_default.json")
+_DEFAULT_STYLE = str(Path(__file__).parent / "style_minipass.json")
 
 
 @mcp.tool()
